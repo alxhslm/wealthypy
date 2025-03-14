@@ -16,12 +16,21 @@ def simulator(
     bond_return: float,
     inflation: float,
     fees: float,
-    equity_weight: float,
+    equity_weight: pd.Series,
     years: int,
     num_simulations: int = 1,
     seed: int = 42,
 ) -> pd.DataFrame:
     months = years * 12
+    index = pd.date_range(dt.date.today(), periods=months, freq="ME").date
+
+    monthly_contributions = monthly_contributions.reindex(
+        index, method="ffill"
+    )
+
+    equity_weight = equity_weight.reindex(
+        index, method="ffill"
+    )
     bond_weight = 1 - equity_weight
 
     # Generate returns
@@ -32,18 +41,14 @@ def simulator(
     bond_monthly_returns = np.full_like(equity_monthly_returns, bond_return / 12)
 
     # Calculate growth
-    equity_growth = (1 + equity_monthly_returns) * equity_weight
-    bond_growth = (1 + bond_monthly_returns) * bond_weight
+    equity_growth = (1 + equity_monthly_returns) * equity_weight.values[:, np.newaxis]
+    bond_growth = (1 + bond_monthly_returns) * bond_weight.values[:, np.newaxis]
     total_growth = equity_growth + bond_growth - fees/12
 
     # Compute portfolio values
     portfolio = pd.DataFrame(
-        index=pd.date_range(dt.date.today(), periods=months, freq="ME").date,
-        columns=range(num_simulations),
-    )
-
-    monthly_contributions = monthly_contributions.reindex(
-        portfolio.index, method="ffill"
+        index=index,
+        columns=range(num_simulations)
     )
 
     portfolio.iloc[0, :] = starting_amount
@@ -65,9 +70,6 @@ with st.sidebar:
     years = st.number_input("Number of Years", value=38, step=1)
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
     fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
-    equity_weight = (
-        st.slider("Equity - Bond Split (%)", value=50.0, min_value=0.0, max_value=100.0, step=10.0) / 100
-    )
 
     tabs = st.tabs(["Equities", "Bonds"])
     with tabs[0]:
@@ -84,27 +86,28 @@ with st.sidebar:
     num_simulations = st.number_input("Number of Simulations", value=10000, step=1)
 
 # Collect variable monthly contributions
-st.subheader("Monthly Contributions")
-monthly_contributions = st.data_editor(
+st.subheader("Schedule", help="Enter the monthly contribution and equity weight")
+schedule = st.data_editor(
     pd.DataFrame(
         {
             "Date": [dt.date.today()],
-            "Amount": [1000.0],
+            "Monthly Contribution": [1000.0],
+            "Equity Weight": [50.0],
         }
     ),
     num_rows="dynamic",
     hide_index=True,
-).set_index("Date")["Amount"]
+).set_index("Date")
 
 
 
 # Run Simulation
 dfs = simulator(
     starting_amount=starting_amount,
-    monthly_contributions=monthly_contributions,
+    monthly_contributions=schedule["Monthly Contribution"],
     equity_return=equity_return,
     equity_volatility=equity_volatility,
-    equity_weight=equity_weight,
+    equity_weight=schedule["Equity Weight"]/ 100,
     bond_return=bond_return,
     inflation=inflation,
     fees=fees,
