@@ -93,7 +93,7 @@ with st.sidebar:
     num_simulations = st.number_input("Number of Simulations", value=1, step=1)
 
 # Run Simulation
-df = pd.concat(
+dfs = pd.concat(
     [
         simulator(
             starting_amount=starting_amount,
@@ -112,14 +112,16 @@ df = pd.concat(
 )
 
 
-df = pd.DataFrame({"mean": df.mean(axis=1), "std": df.std(axis=1)})
+df = pd.DataFrame({"mean": dfs.mean(axis=1), "std": dfs.std(axis=1)})
 
 
 # Plotting with Plotly
 fig = go.Figure()
 
 # Add mean line
-fig.add_trace(go.Scatter(x=df.index, y=df["mean"], mode="lines", name="Mean", showlegend=False))
+fig.add_trace(
+    go.Scatter(x=df.index, y=df["mean"], mode="lines", name="Mean", showlegend=False)
+)
 
 # Add standard deviation shaded area
 fig.add_trace(
@@ -152,3 +154,15 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig)
+
+
+st.plotly_chart(
+    dfs.iloc[-1].hist(
+        nbins=int(num_simulations / 10),
+        histnorm="percent",
+        cumulative=st.toggle("Show Cumulative Distribution", False),
+        title="Final portfolio value",
+        labels={"value": "Portfolio Value (£)"}
+    ).update_layout(showlegend=False, yaxis_title="Percentage (%)")
+
+)
