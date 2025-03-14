@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 
 pd.options.plotting.backend = "plotly"
 
+
 @st.cache_data
 def simulator(
     starting_amount: float,
@@ -16,17 +17,18 @@ def simulator(
     inflation: float,
     equity_weight: float,
     years: int,
+    num_simulations: int = 1,
     seed: int = 42,
-) -> pd.Series:
+) -> pd.DataFrame:
     months = years * 12
     bond_weight = 1 - equity_weight
 
     # Generate returns
     np.random.seed(seed)
     equity_monthly_returns = np.random.normal(
-        equity_return / 12, equity_volatility / np.sqrt(12), months
+        equity_return / 12, equity_volatility / np.sqrt(12), (months, num_simulations)
     )
-    bond_monthly_returns = np.full(months, bond_return / 12)
+    bond_monthly_returns = np.full_like(equity_monthly_returns, bond_return / 12)
 
     # Calculate growth
     equity_growth = (1 + equity_monthly_returns) * equity_weight
@@ -34,23 +36,24 @@ def simulator(
     total_growth = equity_growth + bond_growth
 
     # Compute portfolio values
-    portfolio = pd.Series(
-        index=pd.date_range(dt.date.today(), periods=months, freq="ME").date
+    portfolio = pd.DataFrame(
+        index=pd.date_range(dt.date.today(), periods=months, freq="ME").date,
+        columns=range(num_simulations),
     )
 
     monthly_contributions = monthly_contributions.reindex(
         portfolio.index, method="ffill"
     )
 
-    portfolio.iloc[0] = starting_amount
+    portfolio.iloc[0, :] = starting_amount
     for i in range(1, months):
-        portfolio.iloc[i] = (
-            portfolio.iloc[i - 1] + monthly_contributions.iloc[i - 1]
-        ) * total_growth[i]
+        portfolio.iloc[i, :] = (
+            portfolio.iloc[i - 1, :] + monthly_contributions.iloc[i - 1]
+        ) * total_growth[i, :]
 
     # Adjust for inflation
     inflation_adjustment = (1 + inflation / 12) ** np.arange(months)
-    return portfolio / inflation_adjustment
+    return portfolio.divide(inflation_adjustment, axis=0)
 
 
 # Streamlit UI
@@ -87,28 +90,23 @@ monthly_contributions = st.data_editor(
     ),
     num_rows="dynamic",
     hide_index=True,
-).set_index("Date")
+).set_index("Date")["Amount"]
 
 with st.sidebar:
     num_simulations = st.number_input("Number of Simulations", value=1, step=1)
 
 # Run Simulation
-dfs = pd.concat(
-    [
-        simulator(
-            starting_amount=starting_amount,
-            monthly_contributions=monthly_contributions,
-            equity_return=equity_return,
-            equity_volatility=equity_volatility,
-            equity_weight=equity_weight,
-            bond_return=bond_return,
-            inflation=inflation,
-            years=years,
-            seed=i,
-        )
-        for i in range(num_simulations)
-    ],
-    axis=1,
+dfs = simulator(
+    starting_amount=starting_amount,
+    monthly_contributions=monthly_contributions,
+    equity_return=equity_return,
+    equity_volatility=equity_volatility,
+    equity_weight=equity_weight,
+    bond_return=bond_return,
+    inflation=inflation,
+    years=years,
+    num_simulations=num_simulations,
+    seed=42,
 )
 
 
@@ -157,12 +155,13 @@ st.plotly_chart(fig)
 
 
 st.plotly_chart(
-    dfs.iloc[-1].hist(
+    dfs.iloc[-1]
+    .hist(
         nbins=int(num_simulations / 10),
         histnorm="percent",
         cumulative=st.toggle("Show Cumulative Distribution", False),
         title="Final portfolio value",
-        labels={"value": "Portfolio Value (£)"}
-    ).update_layout(showlegend=False, yaxis_title="Percentage (%)")
-
+        labels={"value": "Portfolio Value (£)"},
+    )
+    .update_layout(showlegend=False, yaxis_title="Percentage (%)")
 )
