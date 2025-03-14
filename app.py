@@ -15,6 +15,7 @@ def simulator(
     equity_volatility: float,
     bond_return: float,
     inflation: float,
+    fees: float,
     equity_weight: float,
     years: int,
     num_simulations: int = 1,
@@ -33,7 +34,7 @@ def simulator(
     # Calculate growth
     equity_growth = (1 + equity_monthly_returns) * equity_weight
     bond_growth = (1 + bond_monthly_returns) * bond_weight
-    total_growth = equity_growth + bond_growth
+    total_growth = equity_growth + bond_growth - fees/12
 
     # Compute portfolio values
     portfolio = pd.DataFrame(
@@ -61,22 +62,24 @@ st.title("Portfolio Growth Simulator")
 
 with st.sidebar:
     starting_amount = st.number_input("Starting Amount (£)", value=10000, step=1000)
-    years = st.number_input("Number of Years", value=30, step=1)
-    inflation = st.number_input("Inflation Rate (%)", value=2.5, step=0.1) / 100
+    years = st.number_input("Number of Years", value=38, step=1)
+    inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
+    fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
     equity_weight = (
-        st.number_input("Equity - Bond Split (%)", value=80.0, step=1.0) / 100
+        st.number_input("Equity - Bond Split (%)", value=50.0, step=1.0) / 100
     )
+
     tabs = st.tabs(["Equities", "Bonds"])
     with tabs[0]:
         equity_return = (
-            st.number_input("Equity Annual Return (%)", value=7.0, step=0.1) / 100
+            st.number_input("Equity Annual Return (%)", value=5.0, step=0.1) / 100
         )
         equity_volatility = (
-            st.number_input("Equity Annual Volatility (%)", value=15.0, step=0.1) / 100
+            st.number_input("Equity Annual Volatility (%)", value=25.0, step=0.1) / 100
         )
     with tabs[1]:
         bond_return = (
-            st.number_input("Bond Annual Return (%)", value=3.0, step=0.1) / 100
+            st.number_input("Bond Annual Return (%)", value=0.5, step=0.1) / 100
         )
 
 # Collect variable monthly contributions
@@ -104,6 +107,7 @@ dfs = simulator(
     equity_weight=equity_weight,
     bond_return=bond_return,
     inflation=inflation,
+    fees=fees,
     years=years,
     num_simulations=num_simulations,
     seed=42,
