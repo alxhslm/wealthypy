@@ -96,7 +96,7 @@ monthly_contributions = st.data_editor(
 ).set_index("Date")["Amount"]
 
 with st.sidebar:
-    num_simulations = st.number_input("Number of Simulations", value=1, step=1)
+    num_simulations = st.number_input("Number of Simulations", value=10000, step=1)
 
 # Run Simulation
 dfs = simulator(
@@ -161,7 +161,7 @@ st.plotly_chart(fig)
 st.plotly_chart(
     dfs.iloc[-1]
     .hist(
-        nbins=int(num_simulations / 10),
+        nbins=int(max(num_simulations / 50, 10)),
         histnorm="percent",
         cumulative=st.toggle("Show Cumulative Distribution", False),
         title="Final portfolio value",
