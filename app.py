@@ -66,7 +66,7 @@ with st.sidebar:
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
     fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
     equity_weight = (
-        st.number_input("Equity - Bond Split (%)", value=50.0, step=1.0) / 100
+        st.slider("Equity - Bond Split (%)", value=50.0, min_value=0.0, max_value=100.0, step=10.0) / 100
     )
 
     tabs = st.tabs(["Equities", "Bonds"])
