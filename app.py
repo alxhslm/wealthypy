@@ -114,7 +114,7 @@ dfs = simulator(
 )
 
 
-df = pd.DataFrame({"mean": dfs.mean(axis=1), "std": dfs.std(axis=1)})
+df = pd.DataFrame({"median": dfs.mean(axis=1), "upper": dfs.quantile(0.975, axis=1), "lower": dfs.quantile(0.025, axis=1)})
 
 
 # Plotting with Plotly
@@ -122,16 +122,16 @@ fig = go.Figure()
 
 # Add mean line
 fig.add_trace(
-    go.Scatter(x=df.index, y=df["mean"], mode="lines", name="Mean", showlegend=False)
+    go.Scatter(x=df.index, y=df["median"], mode="lines", name="Mean", showlegend=False)
 )
 
 # Add standard deviation shaded area
 fig.add_trace(
     go.Scatter(
         x=df.index,
-        y=df["mean"] + df["std"],
+        y=df["upper"],
         mode="lines",
-        name="Mean + 1 Std Dev",
+        name="95% Confidence Interval (upper)",
         line=dict(width=0),
         showlegend=False,
     )
@@ -140,9 +140,9 @@ fig.add_trace(
 fig.add_trace(
     go.Scatter(
         x=df.index,
-        y=df["mean"] - df["std"],
+        y=df["lower"],
         mode="lines",
-        name="Mean - 1 Std Dev",
+        name="95% Confidence Interval (lower)" ,
         line=dict(width=0),
         fill="tonexty",
         showlegend=False,
