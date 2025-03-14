@@ -1,5 +1,7 @@
 # Portfolio Simulator
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://wealthypy.streamlit.app/)
+
 ## Overview
 This is a **Streamlit-based portfolio simulation tool** that helps visualize long-term investment growth using a rational investing approach, as outlined in *Investing Demystified* by Lars Kroijer. The tool allows users to model their retirement savings (e.g., SIPP) using a mix of global equity index funds and government bonds, accounting for inflation, returns, and volatility.
 
