@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 
 pd.options.plotting.backend = "plotly"
 
-
+@st.cache_data
 def simulator(
     starting_amount: float,
     monthly_contributions: pd.Series,
@@ -35,7 +35,7 @@ def simulator(
 
     # Compute portfolio values
     portfolio = pd.Series(
-        index=pd.date_range(dt.date.today(), periods=months, freq="M").date
+        index=pd.date_range(dt.date.today(), periods=months, freq="ME").date
     )
 
     monthly_contributions = monthly_contributions.reindex(
