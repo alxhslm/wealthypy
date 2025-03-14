@@ -81,6 +81,7 @@ with st.sidebar:
         bond_return = (
             st.number_input("Bond Annual Return (%)", value=0.5, step=0.1) / 100
         )
+    num_simulations = st.number_input("Number of Simulations", value=10000, step=1)
 
 # Collect variable monthly contributions
 st.subheader("Monthly Contributions")
@@ -95,8 +96,7 @@ monthly_contributions = st.data_editor(
     hide_index=True,
 ).set_index("Date")["Amount"]
 
-with st.sidebar:
-    num_simulations = st.number_input("Number of Simulations", value=10000, step=1)
+
 
 # Run Simulation
 dfs = simulator(
@@ -113,8 +113,8 @@ dfs = simulator(
     seed=42,
 )
 
-
-df = pd.DataFrame({"median": dfs.mean(axis=1), "upper": dfs.quantile(0.975, axis=1), "lower": dfs.quantile(0.025, axis=1)})
+confidence = st.radio("Select confidence interval", [0.9, 0.95, 0.99], format_func=lambda x:f"{x*100:.0f}%", index=1, horizontal=True)
+df = pd.DataFrame({"median": dfs.mean(axis=1), "upper": dfs.quantile(0.5+confidence/2, axis=1), "lower": dfs.quantile(0.5-confidence/2, axis=1)})
 
 
 # Plotting with Plotly
@@ -150,7 +150,7 @@ fig.add_trace(
 )
 
 fig.update_layout(
-    title="Portfolio Growth with 2σ Confidence Interval",
+    title="Portfolio growth with selected confidence interval",
     xaxis_title="Date",
     yaxis_title="Portfolio Value (£)",
 )
@@ -163,7 +163,7 @@ st.plotly_chart(
     .hist(
         nbins=int(max(num_simulations / 50, 10)),
         histnorm="percent",
-        cumulative=st.toggle("Show Cumulative Distribution", False),
+        cumulative=st.toggle("Show cumulative distribution", False),
         title="Final portfolio value",
         labels={"value": "Portfolio Value (£)"},
     )
