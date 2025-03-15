@@ -173,3 +173,7 @@ st.plotly_chart(
     )
     .update_layout(showlegend=False, yaxis_title="Percentage (%)")
 )
+
+quantiles = dfs.iloc[-1].quantile([0.1, 0.5, 0.9]).to_frame("Portfolio Value (£)")
+quantiles.index = quantiles.index.to_series().apply(lambda x: f"{x*100:.0f}%").rename("Quantile")
+st.dataframe(quantiles.style.format("{:.2f}"))
