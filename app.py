@@ -25,13 +25,13 @@ def simulator(
     years: int,
     num_simulations: int = 1,
     seed: int = 42,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.Series]:
     months = years * 12
     index = pd.date_range(dt.date.today(), periods=months, freq="ME").date
 
     monthly_contributions = monthly_contributions.reindex(index, method="ffill")
 
-    total_growth = np.zeros((months, num_simulations))
+    total_growth = pd.DataFrame(index=index, columns=range(num_simulations), data=0.0)
     np.random.seed(seed)
     allocation = allocation.reindex(index, method="ffill")
     for name, asset in assets.items():
@@ -50,12 +50,14 @@ def simulator(
     portfolio.iloc[0, :] = starting_amount
     for i in range(1, months):
         portfolio.iloc[i, :] = (
-            portfolio.iloc[i - 1, :] + monthly_contributions.iloc[i - 1]
-        ) * total_growth[i, :]
+            (portfolio.iloc[i - 1, :]) * total_growth.iloc[i, :]
+            + monthly_contributions.iloc[i - 1]
+        )
 
+    aer = total_growth.prod().pow(1 / years) - 1
     # Adjust for inflation
     inflation_adjustment = (1 + inflation / 12) ** np.arange(months)
-    return portfolio.divide(inflation_adjustment, axis=0)
+    return portfolio.divide(inflation_adjustment, axis=0), aer
 
 
 # Streamlit UI
@@ -153,19 +155,18 @@ with st.sidebar:
 
     with tabs[1]:
         last_asset = list(selected_assets.keys())[-1]
-        allocation: pd.DataFrame = (
-            st.data_editor(
-                st.session_state["default_allocation"].reset_index(),
-                num_rows="dynamic",
-                hide_index=True,
-                column_config={
-                    k: st.column_config.NumberColumn(min_value=0, max_value=1, format="percent")
-                    for k in selected_assets
-                },
-                key=id(st.session_state["default_allocation"]),
-            ).set_index("Date")
-            
-        )
+        allocation: pd.DataFrame = st.data_editor(
+            st.session_state["default_allocation"].reset_index(),
+            num_rows="dynamic",
+            hide_index=True,
+            column_config={
+                k: st.column_config.NumberColumn(
+                    min_value=0, max_value=1, format="percent"
+                )
+                for k in selected_assets
+            },
+            key=id(st.session_state["default_allocation"]),
+        ).set_index("Date")
         if not allocation.equals(st.session_state["default_allocation"]):
             for i in range(1, allocation.shape[1] - 1):
                 max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
@@ -218,7 +219,7 @@ if run_simulation:
         horizontal=True,
     )
 
-    simulation_dfs = simulator(
+    simulation_dfs, aer = simulator(
         starting_amount=starting_amount,
         monthly_contributions=contributions["Monthly Contribution"],
         allocation=allocation,
@@ -296,12 +297,23 @@ if run_simulation:
         .update_layout(showlegend=False, yaxis_title="Percentage (%)")
     )
 
-    quantiles = (
-        simulation_dfs.iloc[-1].quantile([0.1, 0.5, 0.9]).to_frame("Portfolio Value")
+    quantiles = pd.DataFrame(
+        {
+            "Portfolio Value": simulation_dfs.iloc[-1].quantile([0.1, 0.5, 0.9]),
+            "AER": aer.quantile([0.1, 0.5, 0.9]),
+        }
     )
     quantiles.index = (
         quantiles.index.to_series()
         .apply(lambda x: f"{x * 100:.0f}%")
         .rename("Quantile")
     )
-    st.dataframe(quantiles.style.format("£{:.2f}"))
+    print(aer.quantile([0.1, 0.5, 0.9]))
+    print(quantiles)
+    st.dataframe(
+        quantiles,
+        column_config={
+            "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
+            "AER": st.column_config.NumberColumn(format="percent"),
+        },
+    )
