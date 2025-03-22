@@ -103,7 +103,7 @@ schedule = st.data_editor(
 
 
 # Run Simulation
-dfs = simulator(
+simulation_dfs = simulator(
     starting_amount=starting_amount,
     monthly_contributions=schedule["Monthly Contribution"],
     equity_return=equity_return,
@@ -118,7 +118,7 @@ dfs = simulator(
 )
 
 confidence = st.radio("Select confidence interval", [0.9, 0.95, 0.99], format_func=lambda x:f"{x*100:.0f}%", index=1, horizontal=True)
-df = pd.DataFrame({"median": dfs.mean(axis=1), "upper": dfs.quantile(0.5+confidence/2, axis=1), "lower": dfs.quantile(0.5-confidence/2, axis=1)})
+aggregate_df = pd.DataFrame({"median": simulation_dfs.mean(axis=1), "upper": simulation_dfs.quantile(0.5+confidence/2, axis=1), "lower": simulation_dfs.quantile(0.5-confidence/2, axis=1)})
 
 
 # Plotting with Plotly
@@ -126,14 +126,14 @@ fig = go.Figure()
 
 # Add mean line
 fig.add_trace(
-    go.Scatter(x=df.index, y=df["median"], mode="lines", name="Mean", showlegend=False)
+    go.Scatter(x=aggregate_df.index, y=aggregate_df["median"], mode="lines", name="Mean", showlegend=False)
 )
 
 # Add standard deviation shaded area
 fig.add_trace(
     go.Scatter(
-        x=df.index,
-        y=df["upper"],
+        x=aggregate_df.index,
+        y=aggregate_df["upper"],
         mode="lines",
         name="95% Confidence Interval (upper)",
         line=dict(width=0),
@@ -143,8 +143,8 @@ fig.add_trace(
 
 fig.add_trace(
     go.Scatter(
-        x=df.index,
-        y=df["lower"],
+        x=aggregate_df.index,
+        y=aggregate_df["lower"],
         mode="lines",
         name="95% Confidence Interval (lower)" ,
         line=dict(width=0),
@@ -163,7 +163,7 @@ st.plotly_chart(fig)
 
 
 st.plotly_chart(
-    dfs.iloc[-1]
+    simulation_dfs.iloc[-1]
     .hist(
         nbins=int(max(num_simulations / 50, 10)),
         histnorm="percent",
@@ -174,6 +174,6 @@ st.plotly_chart(
     .update_layout(showlegend=False, yaxis_title="Percentage (%)")
 )
 
-quantiles = dfs.iloc[-1].quantile([0.1, 0.5, 0.9]).to_frame("Portfolio Value (£)")
+quantiles = simulation_dfs.iloc[-1].quantile([0.1, 0.5, 0.9]).to_frame("Portfolio Value (£)")
 quantiles.index = quantiles.index.to_series().apply(lambda x: f"{x*100:.0f}%").rename("Quantile")
 st.dataframe(quantiles.style.format("{:.2f}"))
