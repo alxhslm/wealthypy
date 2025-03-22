@@ -54,9 +54,9 @@ def simulator(
             + monthly_contributions.iloc[i - 1]
         )
 
-    aer = total_growth.prod().pow(1 / years) - 1
     # Adjust for inflation
     inflation_adjustment = (1 + inflation / 12) ** np.arange(months)
+    aer = total_growth.divide(inflation_adjustment, axis=0).prod().pow(1 / years) - 1
     return portfolio.divide(inflation_adjustment, axis=0), aer
 
 
