@@ -155,16 +155,16 @@ with st.sidebar:
         last_asset = list(selected_assets.keys())[-1]
         allocation: pd.DataFrame = (
             st.data_editor(
-                st.session_state["default_allocation"].multiply(100).reset_index(),
+                st.session_state["default_allocation"].reset_index(),
                 num_rows="dynamic",
                 hide_index=True,
                 column_config={
-                    k: st.column_config.NumberColumn(min_value=0, max_value=100)
+                    k: st.column_config.NumberColumn(min_value=0, max_value=1, format="percent")
                     for k in selected_assets
                 },
                 key=id(st.session_state["default_allocation"]),
             ).set_index("Date")
-            / 100
+            
         )
         if not allocation.equals(st.session_state["default_allocation"]):
             for i in range(1, allocation.shape[1] - 1):
