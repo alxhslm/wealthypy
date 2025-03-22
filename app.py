@@ -71,13 +71,15 @@ if "default_assets" not in st.session_state:
     }
 
 if "default_allocation" not in st.session_state:
-    st.session_state["default_allocation"] = pd.DataFrame(
-        {"Date": [dt.date.today()]}
-        | {
+    default_allocation = pd.DataFrame(
+        {
             k: [1.0 / len(st.session_state["default_assets"])]
             for k in st.session_state["default_assets"]
         },
-    ).set_index("Date")
+        index=[dt.date.today()],
+    )
+    default_allocation.index.name = "Date"
+    st.session_state["default_allocation"] = default_allocation
 
 
 def _get_name(assets: dict[str, Asset]) -> str:
@@ -101,7 +103,9 @@ with st.sidebar:
         ),
         num_rows="dynamic",
         hide_index=True,
-        column_config={"Monthly Contribution":st.column_config.NumberColumn(format="£%.2f")},
+        column_config={
+            "Monthly Contribution": st.column_config.NumberColumn(format="£%.2f")
+        },
     ).set_index("Date")
 
     st.header("Portfolio")
