@@ -118,16 +118,17 @@ with st.sidebar:
             st.session_state["default_assets"][new_name] = Asset(
                 returns=0.0, volatility=0.0
             )
+            st.session_state["default_allocation"][new_name] = 0.0
 
         with container:
             selected_assets = {}
-            asset_names = {}
+            renamed_assets = {}
             to_delete = []
             for name, asset in st.session_state["default_assets"].items():
                 with st.expander(f"{name}"):
                     new_name = st.text_input("Name", name, key=f"{name}_name")
                     if new_name != name:
-                        asset_names[name] = new_name
+                        renamed_assets[name] = new_name
                     selected_assets[name] = Asset(
                         returns=st.number_input(
                             "Annual Returns (%)",
@@ -146,18 +147,36 @@ with st.sidebar:
                             / 100
                         ),
                     )
-                    if st.button(":material/delete:", key=f"{name}_delete"):
-                        to_delete.append(name)
+                    if len(st.session_state["default_assets"]) > 1:
+                        if st.button(":material/delete:", key=f"{name}_delete"):
+                            to_delete.append(name)
 
     with tabs[1]:
-        allocation = (
+        last_asset = list(selected_assets.keys())[-1]
+        allocation: pd.DataFrame = (
             st.data_editor(
                 st.session_state["default_allocation"].multiply(100).reset_index(),
                 num_rows="dynamic",
                 hide_index=True,
+                column_config={
+                    k: st.column_config.NumberColumn(min_value=0, max_value=100)
+                    for k in selected_assets
+                },
+                key=id(st.session_state["default_allocation"]),
             ).set_index("Date")
             / 100
         )
+        if not allocation.equals(st.session_state["default_allocation"]):
+            for i in range(1, allocation.shape[1] - 1):
+                max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
+                allocation.iloc[:, i] = allocation.iloc[:, i].clip(
+                    lower=0, upper=max_allocation
+                )
+            allocation.iloc[:, -1] = (1 - allocation.iloc[:, :-1].sum(axis=1)).clip(
+                lower=0
+            )
+            st.session_state["default_allocation"] = allocation
+            st.rerun()
 
     if to_delete:
         st.session_state["default_assets"] = {
@@ -165,13 +184,16 @@ with st.sidebar:
         }
         st.session_state["default_allocation"] = allocation.drop(columns=to_delete)
         st.rerun()
-    if asset_names:
+
+    if renamed_assets:
         st.session_state["default_assets"] = selected_assets
-        for old_name, new_name in asset_names.items():
+        for old_name, new_name in renamed_assets.items():
             st.session_state["default_assets"][new_name] = st.session_state[
                 "default_assets"
             ].pop(old_name)
-        st.session_state["default_allocation"] = allocation.rename(columns=asset_names)
+        st.session_state["default_allocation"] = allocation.rename(
+            columns=renamed_assets
+        )
         st.rerun()
     st.header("Settings")
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
