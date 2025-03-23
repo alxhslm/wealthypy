@@ -308,8 +308,8 @@ if run_simulation:
         .apply(lambda x: f"{x * 100:.0f}%")
         .rename("Quantile")
     )
-    print(aer.quantile([0.1, 0.5, 0.9]))
-    print(quantiles)
+    quantiles.loc["Mean",:] = [simulation_dfs.iloc[-1].mean(), aer.mean()]
+    
     st.dataframe(
         quantiles,
         column_config={
@@ -317,3 +317,4 @@ if run_simulation:
             "AER": st.column_config.NumberColumn(format="percent"),
         },
     )
+
