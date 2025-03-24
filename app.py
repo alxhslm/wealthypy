@@ -308,8 +308,7 @@ if run_simulation:
         .apply(lambda x: f"{x * 100:.0f}%")
         .rename("Quantile")
     )
-    quantiles.loc["Mean",:] = [simulation_dfs.iloc[-1].mean(), aer.mean()]
-    
+    quantiles.loc["Mean", :] = [simulation_dfs.iloc[-1].mean(), aer.mean()]
     st.dataframe(
         quantiles,
         column_config={
@@ -318,3 +317,11 @@ if run_simulation:
         },
     )
 
+    st.plotly_chart(
+        pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100*aer}).plot.scatter(
+            x="value",
+            y="aer",
+            title="Portfolio Value vs AER",
+            labels={"value": "Portfolio Value (£)", "aer": "AER [%]"},
+        )
+    )
