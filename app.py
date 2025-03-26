@@ -1,83 +1,14 @@
-from dataclasses import dataclass
 import streamlit as st
-import numpy as np
 import pandas as pd
 import datetime as dt
-import plotly.graph_objects as go
-import yfinance as yf
+
+from backtesting import fetch_historic_growth
+from models import Asset
+from monte_carlo import sample_growth, compute_quantiles
+from plotting import plot_hist_returns, plot_returns, plot_scatter
+from simulate import run_simulation
 
 pd.options.plotting.backend = "plotly"
-
-
-@dataclass
-class Asset:
-    returns: float
-    volatility: float
-    ticker: str | None = None
-
-
-def run_simulation(
-    starting_amount: float,
-    monthly_contributions: pd.Series,
-    growth: pd.DataFrame,
-    inflation: float,
-) -> tuple[pd.DataFrame, pd.Series]:
-    # Compute portfolio values
-    portfolio = pd.DataFrame(index=growth.index, columns=growth.columns)
-    portfolio.iloc[0, :] = starting_amount
-    for i in range(1, growth.shape[0]):
-        portfolio.iloc[i, :] = (
-            (portfolio.iloc[i - 1, :]) * growth.iloc[i, :]
-            + monthly_contributions.iloc[i - 1]
-        )
-
-    # Adjust for inflation
-    inflation_adjustment = (1 + inflation / 12) ** np.arange(growth.shape[0])
-    years = (growth.index[-1] - growth.index[0]).total_seconds() / (365.25 * 24 * 3600)
-    aer = growth.divide(inflation_adjustment, axis=0).prod().pow(1 / years) - 1
-    return portfolio.divide(inflation_adjustment, axis=0), aer
-
-
-def _sample_volatile_growth(
-    assets: dict[str, Asset],
-    allocation: pd.DataFrame,
-    num_simulations: int,
-    seed: int = 42,
-) -> pd.DataFrame:
-    np.random.seed(seed)
-    total_growth = pd.DataFrame(
-        index=allocation.index, columns=range(num_simulations), data=0.0
-    )
-    for name, asset in assets.items():
-        monthly_returns = np.random.normal(
-            asset.returns / 12,
-            asset.volatility / np.sqrt(12),
-            (allocation.shape[0], num_simulations),
-        )
-        growth = (1 + monthly_returns) * allocation[name].values[:, np.newaxis]
-        total_growth += growth
-    return total_growth
-
-
-def _fetch_historic_growth(
-    assets: dict[str, Asset], allocation: pd.DataFrame
-) -> pd.DataFrame:
-    total_growth = pd.Series(index=allocation.index, data=0.0)
-    for name, asset in assets.items():
-        assert asset.ticker, f"Missing ticker for asset {name}"
-        ticker_data = yf.download(
-            asset.ticker,
-            start=allocation.index[0] - dt.timedelta(days=31),
-            end=allocation.index[-1],
-            interval="1mo",
-        )
-        monthly_returns = (
-            ticker_data[("Close", asset.ticker)]
-            .pct_change()
-            .reindex(allocation.index, method="ffill")
-        )
-        total_growth += (1 + monthly_returns) * allocation[name].values
-    return total_growth.to_frame()
 
 
 @st.cache_data
@@ -97,7 +28,7 @@ def monte_carlo(
     return run_simulation(
         starting_amount=starting_amount,
         monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
-        growth=_sample_volatile_growth(
+        growth=sample_growth(
             assets=assets,
             allocation=allocation.reindex(index, method="ffill"),
             num_simulations=num_simulations,
@@ -123,7 +54,7 @@ def backtest(
     return run_simulation(
         starting_amount=starting_amount,
         monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
-        growth=_fetch_historic_growth(
+        growth=fetch_historic_growth(
             assets=assets, allocation=allocation.reindex(index, method="ffill")
         )
         - fees / 12,
@@ -241,7 +172,9 @@ with st.sidebar:
     with tabs[1]:
         last_asset = list(selected_assets.keys())[-1]
         default_allocation = st.session_state["default_allocation"]
-        default_allocation.index = default_allocation.index + (start_date -  default_allocation.index[0])
+        default_allocation.index = default_allocation.index + (
+            start_date - default_allocation.index[0]
+        )
         allocation: pd.DataFrame = st.data_editor(
             default_allocation.reset_index(),
             num_rows="dynamic",
@@ -296,9 +229,12 @@ with columns[0]:
 with columns[1]:
     if mode == "Monte-carlo":
         with st.popover(":material/settings:"):
-            num_simulations = st.number_input("Number of Simulations", value=10000, step=1)
+            num_simulations = st.number_input(
+                "Number of Simulations", value=10000, step=1
+            )
 
 st.divider()
+
 
 if simulate:
     confidence = st.radio(
@@ -322,8 +258,43 @@ if simulate:
             num_simulations=num_simulations,
             seed=42,
         )
+        
+
+        st.plotly_chart(plot_returns(simulation_dfs, confidence=confidence))
+
+        st.plotly_chart(
+            plot_hist_returns(
+                simulation_dfs.iloc[-1],
+                cumulative=st.toggle("Show cumulative distribution", False),
+            )
+        )
+
+        quantiles = pd.DataFrame(
+            {
+                "Portfolio Value": compute_quantiles(simulation_dfs.iloc[-1]),
+                "AER": compute_quantiles(aer),
+            }
+        )
+        st.dataframe(
+            quantiles,
+            column_config={
+                "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
+                "AER": st.column_config.NumberColumn(format="percent"),
+            },
+        )
+
+        st.plotly_chart(
+            plot_scatter(
+                pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100 * aer}),
+                x="value",
+                y="aer",
+                title="Portfolio Value vs AER",
+                x_title="Portfolio Value (£)",
+                y_title="AER (%)",
+            )
+        )
     elif mode == "Backtesting":
-        simulation_dfs, aer = backtest(
+        simulation_df, aer = backtest(
             starting_amount=starting_amount,
             monthly_contributions=contributions["Monthly Contribution"],
             allocation=allocation,
@@ -333,100 +304,6 @@ if simulate:
             start_date=start_date,
             end_date=end_date,
         )
+        st.plotly_chart(plot_returns(simulation_df))
     else:
         raise ValueError(f"Unknown mode {mode}")
-
-    aggregate_df = pd.DataFrame(
-        {
-            "median": simulation_dfs.mean(axis=1),
-            "upper": simulation_dfs.quantile(0.5 + confidence / 2, axis=1),
-            "lower": simulation_dfs.quantile(0.5 - confidence / 2, axis=1),
-        }
-    )
-
-    # Plotting with Plotly
-    fig = go.Figure()
-
-    # Add mean line
-    fig.add_trace(
-        go.Scatter(
-            x=aggregate_df.index,
-            y=aggregate_df["median"],
-            mode="lines",
-            name="Mean",
-            showlegend=False,
-        )
-    )
-
-    # Add standard deviation shaded area
-    fig.add_trace(
-        go.Scatter(
-            x=aggregate_df.index,
-            y=aggregate_df["upper"],
-            mode="lines",
-            name="95% Confidence Interval (upper)",
-            line=dict(width=0),
-            showlegend=False,
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=aggregate_df.index,
-            y=aggregate_df["lower"],
-            mode="lines",
-            name="95% Confidence Interval (lower)",
-            line=dict(width=0),
-            fill="tonexty",
-            showlegend=False,
-        )
-    )
-
-    fig.update_layout(
-        title="Portfolio growth with selected confidence interval",
-        xaxis_title="Date",
-        yaxis_title="Portfolio Value (£)",
-    )
-
-    st.plotly_chart(fig)
-
-    st.plotly_chart(
-        simulation_dfs.iloc[-1]
-        .hist(
-            nbins=int(max(simulation_dfs.shape[1] / 50, 10)),
-            histnorm="percent",
-            cumulative=st.toggle("Show cumulative distribution", False),
-            title="Final portfolio value",
-            labels={"value": "Portfolio Value (£)"},
-        )
-        .update_layout(showlegend=False, yaxis_title="Percentage (%)")
-    )
-
-    quantiles = pd.DataFrame(
-        {
-            "Portfolio Value": simulation_dfs.iloc[-1].quantile([0.1, 0.5, 0.9]),
-            "AER": aer.quantile([0.1, 0.5, 0.9]),
-        }
-    )
-    quantiles.index = (
-        quantiles.index.to_series()
-        .apply(lambda x: f"{x * 100:.0f}%")
-        .rename("Quantile")
-    )
-    quantiles.loc["Mean", :] = [simulation_dfs.iloc[-1].mean(), aer.mean()]
-    st.dataframe(
-        quantiles,
-        column_config={
-            "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
-            "AER": st.column_config.NumberColumn(format="percent"),
-        },
-    )
-
-    st.plotly_chart(
-        pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100 * aer}).plot.scatter(
-            x="value",
-            y="aer",
-            title="Portfolio Value vs AER",
-            labels={"value": "Portfolio Value (£)", "aer": "AER [%]"},
-        )
-    )
