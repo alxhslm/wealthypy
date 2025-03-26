@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 
-from backtesting import fetch_historic_growth
-from models import Asset
-from monte_carlo import sample_growth, compute_quantiles
-from plotting import plot_hist_returns, plot_returns, plot_scatter
-from simulate import run_simulation
+from src.backtesting import fetch_historic_growth
+from src.models import Asset
+from src.monte_carlo import sample_growth, compute_quantiles
+from src.plotting import plot_hist_returns, plot_returns, plot_scatter
+from src.simulate import run_simulation
 
 pd.options.plotting.backend = "plotly"
 
@@ -237,14 +237,6 @@ st.divider()
 
 
 if simulate:
-    confidence = st.radio(
-        "Select confidence interval",
-        [0.9, 0.95, 0.99],
-        format_func=lambda x: f"{x * 100:.0f}%",
-        index=1,
-        horizontal=True,
-    )
-
     if mode == "Monte-carlo":
         simulation_dfs, aer = monte_carlo(
             starting_amount=starting_amount,
@@ -258,9 +250,19 @@ if simulate:
             num_simulations=num_simulations,
             seed=42,
         )
-        
 
-        st.plotly_chart(plot_returns(simulation_dfs, confidence=confidence))
+        st.plotly_chart(
+            plot_returns(
+                simulation_dfs,
+                confidence=st.radio(
+                    "Select confidence interval",
+                    [0.9, 0.95, 0.99],
+                    format_func=lambda x: f"{x * 100:.0f}%",
+                    index=1,
+                    horizontal=True,
+                ),
+            )
+        )
 
         st.plotly_chart(
             plot_hist_returns(

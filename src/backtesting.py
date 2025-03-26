@@ -1,6 +1,6 @@
 import pandas as pd
 
-from models import Asset
+from src.models import Asset
 import yfinance as yf
 import datetime as dt
 
