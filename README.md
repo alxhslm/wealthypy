@@ -9,10 +9,9 @@ This is a **Streamlit-based portfolio simulation tool** that helps visualize lon
 - **Customizable Inputs:**
   - Starting portfolio amount
   - Annual inflation rate
-  - Fixed annual returns for equity and bonds
-  - Equity volatility (in terms of a standard deviation)
-  - Variable monthly contributions and equity/bond split over different years
-- **Monte Carlo-style simulations** to reflect stock market volatility.
+  - Variable monthly contributions and allocation
+- **Monte Carlo simulations** assuming each asset has a fixed average return and constant volality.
+- **Backtesting** using historic returns from Yahoo! finance
 - **Interactive visualization** of portfolio growth over time using Plotly.
 
 ## Installation
