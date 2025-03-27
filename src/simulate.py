@@ -19,6 +19,6 @@ def run_simulation(
 
     # Adjust for inflation
     inflation_adjustment = (1 + inflation / 12) ** np.arange(growth.shape[0])
-    years = (growth.index[-1] - growth.index[0]).total_seconds() / (365.25 * 24 * 3600)
-    aer = growth.divide(inflation_adjustment, axis=0).prod().pow(1 / years) - 1
+    years = len(growth) / 12
+    aer = growth.divide(1 + inflation / 12).prod().pow(1 / years) - 1
     return portfolio.divide(inflation_adjustment, axis=0), aer
