@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 
-from src.backtesting import fetch_historic_growth
+from src.backtesting import estimate_returns_and_volatility, fetch_historic_returns
 from src.models import Asset
-from src.monte_carlo import sample_growth, compute_quantiles
+from src.monte_carlo import sample_returns, compute_quantiles
 from src.plotting import plot_hist_returns, plot_returns, plot_scatter
 from src.simulate import run_simulation
 
@@ -28,7 +28,7 @@ def monte_carlo(
     return run_simulation(
         starting_amount=starting_amount,
         monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
-        growth=sample_growth(
+        growth=sample_returns(
             assets=assets,
             allocation=allocation.reindex(index, method="ffill"),
             num_simulations=num_simulations,
@@ -54,7 +54,7 @@ def backtest(
     return run_simulation(
         starting_amount=starting_amount,
         monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
-        growth=fetch_historic_growth(
+        growth=fetch_historic_returns(
             assets=assets, allocation=allocation.reindex(index, method="ffill")
         )
         - fees / 12,
@@ -124,6 +124,14 @@ with st.sidebar:
     ).set_index("Date")
 
     st.header("Portfolio")
+    with st.expander("Estimate returns and volatility", icon=":material/cloud_download:"):
+        start_est = st.date_input(
+            "Start Date", value=dt.date(1900, 1, 1), max_value=dt.date.today()
+        )
+        end_est = st.date_input(
+            "Start Date", value=dt.date.today(), max_value=dt.date.today()
+        )
+        estimate = st.button("Estimate")
     tabs = st.tabs(["Assets", "Allocation"])
     with tabs[0]:
         container = st.container()
@@ -144,6 +152,13 @@ with st.sidebar:
                     new_name = st.text_input("Name", name, key=f"{name}_name")
                     if new_name != name:
                         renamed_assets[name] = new_name
+                    ticker = st.text_input("Ticker", asset.ticker, key=f"{name}_ticker")
+                    if estimate and ticker is not None:
+                        asset.returns, asset.volatility = (
+                            estimate_returns_and_volatility(
+                                ticker, start=start_est, end=end_est
+                            )
+                        )
                     selected_assets[name] = Asset(
                         returns=st.number_input(
                             "Annual Returns (%)",
@@ -161,9 +176,7 @@ with st.sidebar:
                             )
                             / 100
                         ),
-                        ticker=st.text_input(
-                            "Ticker", asset.ticker, key=f"{name}_ticker"
-                        ),
+                        ticker=ticker,
                     )
                     if len(st.session_state["default_assets"]) > 1:
                         if st.button(":material/delete:", key=f"{name}_delete"):
@@ -308,7 +321,9 @@ if simulate:
         )
         st.plotly_chart(plot_returns(simulation_df))
         st.metric(
-            "Portfolio Value (£)", f"£{simulation_df.iloc[-1, 0]:.2f}", delta=f"{aer.mean() * 100:.2f}%"
+            "Portfolio Value (£)",
+            f"£{simulation_df.iloc[-1, 0]:.2f}",
+            delta=f"{aer.mean() * 100:.2f}%",
         )
     else:
         raise ValueError(f"Unknown mode {mode}")

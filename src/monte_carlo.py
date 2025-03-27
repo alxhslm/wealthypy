@@ -4,7 +4,7 @@ import pandas as pd
 from src.models import Asset
 
 
-def sample_growth(
+def sample_returns(
     assets: dict[str, Asset],
     allocation: pd.DataFrame,
     num_simulations: int,
