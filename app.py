@@ -307,5 +307,8 @@ if simulate:
             end_date=end_date,
         )
         st.plotly_chart(plot_returns(simulation_df))
+        st.metric(
+            "Portfolio Value (£)", f"£{simulation_df.iloc[-1, 0]:.2f}", delta=f"{aer.mean() * 100:.2f}%"
+        )
     else:
         raise ValueError(f"Unknown mode {mode}")
