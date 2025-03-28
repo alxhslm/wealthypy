@@ -178,6 +178,7 @@ with st.sidebar:
                         ),
                         ticker=ticker,
                     )
+                    st.text(f"Estimated Returns: {100*(asset.returns - asset.volatility**2/2):.2f}%")
                     if len(st.session_state["default_assets"]) > 1:
                         if st.button(":material/delete:", key=f"{name}_delete"):
                             to_delete.append(name)
