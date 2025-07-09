@@ -252,14 +252,14 @@ with columns[0]:
     simulate = st.button("Run Simulation")
 with columns[1]:
     if mode == "Monte-carlo":
-        with st.popover(":material/settings:"):
+        with st.popover("Settings", icon=":material/settings:"):
             num_simulations = st.number_input(
                 "Number of Simulations", value=10000, step=1
             )
-            if st.checkbox(
-                "Use covariance matrix",
+            if st.toggle(
+                "Account for correlation between assets",
                 value=True,
-                help="If unchecked, uses independent normal distribution for returns.",
+                help="If unchecked, the correlation between assets will be ignored.",
             ):
                 # Estimate the covariance matrix from historical returns
                 cov_matrix = pd.DataFrame(
