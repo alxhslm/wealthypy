@@ -131,8 +131,8 @@ with st.sidebar:
     ).set_index("Date")
 
     st.header("Portfolio")
-    with st.expander(
-        "Estimate returns and volatility", icon=":material/cloud_download:"
+    with st.popover(
+        "Estimate returns", icon=":material/cloud_download:"
     ):
         start_est = st.date_input(
             "Start Date", value=dt.date(1900, 1, 1), max_value=dt.date.today()
@@ -140,7 +140,6 @@ with st.sidebar:
         end_est = st.date_input(
             "Start Date", value=dt.date.today(), max_value=dt.date.today()
         )
-        estimate = st.button("Estimate")
     tabs = st.tabs(["Assets", "Allocation"])
     with tabs[0]:
         container = st.container()
@@ -162,7 +161,7 @@ with st.sidebar:
                     if new_name != name:
                         renamed_assets[name] = new_name
                     ticker = st.text_input("Ticker", asset.ticker, key=f"{name}_ticker")
-                    if estimate and ticker is not None:
+                    if ticker is not None:
                         asset.returns, asset.volatility = (
                             estimate_returns_and_volatility(
                                 ticker, start=start_est, end=end_est
@@ -265,7 +264,9 @@ with columns[1]:
                 # Estimate the covariance matrix from historical returns
                 cov_matrix = pd.DataFrame(
                     {
-                        name: fetch_monthly_returns(asset.ticker, start=start_date, end=end_date)
+                        name: fetch_monthly_returns(
+                            asset.ticker, start=start_date, end=end_date
+                        )
                         for name, asset in selected_assets.items()
                     }
                 ).cov()
