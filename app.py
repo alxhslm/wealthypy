@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 
-from src.backtesting import estimate_returns_and_volatility, fetch_historic_returns
+from src.backtesting import (
+    estimate_returns_and_volatility,
+    fetch_historic_returns,
+    fetch_monthly_returns,
+)
 from src.models import Asset
 from src.monte_carlo import sample_returns, compute_quantiles
 from src.plotting import plot_hist_returns, plot_returns, plot_scatter
@@ -21,6 +25,7 @@ def monte_carlo(
     fees: float,
     start_date: dt.date,
     end_date: dt.date,
+    cov_matrix: pd.DataFrame | None = None,
     num_simulations: int = 1,
     seed: int = 42,
 ) -> tuple[pd.DataFrame, pd.Series]:
@@ -33,6 +38,7 @@ def monte_carlo(
             allocation=allocation.reindex(index, method="ffill"),
             num_simulations=num_simulations,
             seed=seed,
+            cov_matrix=cov_matrix,  # Pass the covariance matrix
         )
         - fees / 12,
         inflation=inflation,
@@ -51,6 +57,7 @@ def backtest(
     end_date: dt.date,
 ) -> tuple[pd.DataFrame, pd.Series]:
     index = pd.date_range(start_date, end_date, freq="ME").date
+
     return run_simulation(
         starting_amount=starting_amount,
         monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
@@ -124,7 +131,9 @@ with st.sidebar:
     ).set_index("Date")
 
     st.header("Portfolio")
-    with st.expander("Estimate returns and volatility", icon=":material/cloud_download:"):
+    with st.expander(
+        "Estimate returns and volatility", icon=":material/cloud_download:"
+    ):
         start_est = st.date_input(
             "Start Date", value=dt.date(1900, 1, 1), max_value=dt.date.today()
         )
@@ -178,7 +187,9 @@ with st.sidebar:
                         ),
                         ticker=ticker,
                     )
-                    st.text(f"Estimated Returns: {100*(asset.returns - asset.volatility**2/2):.2f}%")
+                    st.text(
+                        f"Estimated Returns: {100 * (asset.returns - asset.volatility**2 / 2):.2f}%"
+                    )
                     if len(st.session_state["default_assets"]) > 1:
                         if st.button(":material/delete:", key=f"{name}_delete"):
                             to_delete.append(name)
@@ -246,6 +257,20 @@ with columns[1]:
             num_simulations = st.number_input(
                 "Number of Simulations", value=10000, step=1
             )
+            if st.checkbox(
+                "Use covariance matrix",
+                value=True,
+                help="If unchecked, uses independent normal distribution for returns.",
+            ):
+                # Estimate the covariance matrix from historical returns
+                cov_matrix = pd.DataFrame(
+                    {
+                        name: fetch_monthly_returns(asset.ticker, start=start_date, end=end_date)
+                        for name, asset in selected_assets.items()
+                    }
+                ).cov()
+            else:
+                cov_matrix = None
 
 st.divider()
 
@@ -261,6 +286,7 @@ if simulate:
             fees=fees,
             start_date=start_date,
             end_date=end_date,
+            cov_matrix=cov_matrix,
             num_simulations=num_simulations,
             seed=42,
         )
