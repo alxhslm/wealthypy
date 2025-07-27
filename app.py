@@ -315,14 +315,14 @@ elif mode == "Run simulation":
             quantiles = pd.DataFrame(
                 {
                     "Portfolio Value": compute_quantiles(simulation_dfs.iloc[-1]),
-                    "AER": compute_quantiles(aer),
+                    "CAGR": compute_quantiles(aer),
                 }
             )
             st.dataframe(
                 quantiles,
                 column_config={
                     "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
-                    "AER": st.column_config.NumberColumn(format="percent"),
+                    "CAGR": st.column_config.NumberColumn(format="percent"),
                 },
             )
 
@@ -331,9 +331,9 @@ elif mode == "Run simulation":
                     pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100 * aer}),
                     x="value",
                     y="aer",
-                    title="Portfolio Value vs AER",
+                    title="Portfolio Value vs CAGR",
                     x_title="Portfolio Value (£)",
-                    y_title="AER (%)",
+                    y_title="CAGR (%)",
                 )
             )
         elif mode == "Backtesting":
