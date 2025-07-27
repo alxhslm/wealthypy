@@ -256,34 +256,35 @@ elif page == "Configure portfolio":
             }
 
             st.subheader("Allocation")
-            last_asset = list(modified_assets[name].keys())[-1]
             allocation = st.session_state["allocation"].get(
                 name, _default_allocation(start_date, modified_assets[name])
             )
-            allocation = allocation.reindex(columns=modified_assets[name].keys())
-            allocation.index = allocation.index + (start_date - allocation.index[0])
-            if not allocation.equals(st.session_state["allocation"]):
-                for i in range(1, allocation.shape[1] - 1):
-                    max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
-                    allocation.iloc[:, i] = allocation.iloc[:, i].clip(
-                        lower=0, upper=max_allocation
-                    )
-                allocation.iloc[:, -1] = (1 - allocation.iloc[:, :-1].sum(axis=1)).clip(
-                    lower=0
-                )
-            modified_allocation[name]: pd.DataFrame = st.data_editor(
+            allocation = allocation.reindex(columns=list(modified_assets[name].keys()))
+            new_allocation = st.data_editor(
                 allocation.reset_index(),
                 hide_index=True,
                 num_rows="dynamic",
                 column_config={
                     k: st.column_config.NumberColumn(
-                        min_value=0, max_value=1, format="percent"
+                        min_value=0,
+                        max_value=1,
+                        format="percent",
                     )
-                    for k in assets
+                    for i, k in enumerate(modified_assets[name].keys())
                 }
                 | {"Date": st.column_config.DateColumn()},
                 key=f"allocation_editor_{name}",
             ).set_index("Date")
+            if (new_allocation.sum(axis=1) != 1).any():
+                for i in range(1, allocation.shape[1] - 1):
+                    max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
+                    new_allocation.iloc[:, i] = new_allocation.iloc[:, i].clip(
+                        lower=0, upper=max_allocation
+                    )
+                new_allocation.iloc[:, -1] = 1 - new_allocation.iloc[:, :-1].sum(axis=1)
+                st.session_state["allocation"][name] = new_allocation
+                st.rerun()
+            modified_allocation[name] = new_allocation
 
     st.session_state["assets"] = modified_assets
     st.session_state["allocation"] = modified_allocation
