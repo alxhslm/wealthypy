@@ -5,55 +5,58 @@ import plotly.express as px
 pd.options.plotting.backend = "plotly"
 
 
-def plot_returns(simulation_dfs: pd.DataFrame, confidence:float|None=None) -> go.Figure:
-    if confidence:
-        aggregate_df = pd.DataFrame(
-            {
-                "median": simulation_dfs.median(axis=1),
-                "upper": simulation_dfs.quantile(0.5 + confidence / 2, axis=1),
-                "lower": simulation_dfs.quantile(0.5 - confidence / 2, axis=1),
-            }
-        )
-    else:
-        aggregate_df = simulation_dfs.median(axis=1).to_frame("median")
+def plot_returns(
+    simulation_dfs: dict[str, pd.DataFrame],
+    confidence: float | None = None,
+) -> go.Figure:
     fig = go.Figure()
-
-    # Add median line
-    fig.add_trace(
-        go.Scatter(
-            x=aggregate_df.index,
-            y=aggregate_df["median"],
-            mode="lines",
-            name="median",
-            showlegend=False,
-        )
-    )
-
-    if confidence:
-        # Add standard deviation shaded area
+    colors = dict(zip(simulation_dfs, px.colors.qualitative.Plotly))
+    for key, df in simulation_dfs.items():
+        if confidence:
+            aggregate_df = pd.DataFrame(
+                {
+                    "median": df.median(axis=1),
+                    "upper": df.quantile(0.5 + confidence / 2, axis=1),
+                    "lower": df.quantile(0.5 - confidence / 2, axis=1),
+                }
+            )
+        else:
+            aggregate_df = df.median(axis=1).to_frame("median")
+        # Add median line for each portfolio
         fig.add_trace(
             go.Scatter(
                 x=aggregate_df.index,
-                y=aggregate_df["upper"],
+                y=aggregate_df["median"],
                 mode="lines",
-                name="95% Confidence Interval (upper)",
-                line=dict(width=0),
-                showlegend=False,
+                name=key,
+                legendgroup=key,
+                line_color=colors[key],
+                showlegend=True,
             )
         )
-
-        fig.add_trace(
-            go.Scatter(
-                x=aggregate_df.index,
-                y=aggregate_df["lower"],
-                mode="lines",
-                name="95% Confidence Interval (lower)",
-                line=dict(width=0),
-                fill="tonexty",
-                showlegend=False,
+        if confidence:
+            fig.add_trace(
+                go.Scatter(
+                    x=aggregate_df.index,
+                    y=aggregate_df["lower"],
+                    mode="lines",
+                    legendgroup=key,
+                    line=dict(width=0),
+                    showlegend=False,
+                )
             )
-        )
-
+            fig.add_trace(
+                go.Scatter(
+                    x=aggregate_df.index,
+                    y=aggregate_df["upper"],
+                    mode="lines",
+                    legendgroup=key,
+                    line=dict(width=0),
+                    marker=dict(color=colors[key]),
+                    fill="tonexty",
+                    showlegend=False,
+                )
+            )
     fig.update_layout(
         title="Portfolio growth with selected confidence interval",
         xaxis_title="Date",
@@ -62,17 +65,21 @@ def plot_returns(simulation_dfs: pd.DataFrame, confidence:float|None=None) -> go
     return fig
 
 
-def plot_hist_returns(returns: pd.Series, xlabel: str, title: str, cumulative: bool=False) -> go.Figure:
+def plot_hist_returns(
+    returns: pd.DataFrame, xlabel: str, title: str, cumulative: bool = False
+) -> go.Figure:
     fig = px.histogram(
-        returns,
+        returns if not isinstance(returns, pd.DataFrame) else returns.squeeze(),
         nbins=int(max(len(returns) / 50, 10)),
         histnorm="percent",
         cumulative="sum" if cumulative else None,
         title=title,
-        labels={"value": xlabel},
-        marginal="box"
+        labels={"value": xlabel, "variable": "Configuration"},
+        marginal="box",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
+        barmode="overlay",
     )
-    fig.update_layout(showlegend=False, yaxis_title="Percentage (%)")
+    fig.update_layout( yaxis_title="Percentage (%)")
     return fig
 
 
