@@ -61,13 +61,13 @@ def plot_returns(simulation_dfs: pd.DataFrame, confidence:float|None=None) -> go
     return fig
 
 
-def plot_hist_returns(returns: pd.Series, cumulative: bool) -> go.Figure:
+def plot_hist_returns(returns: pd.Series, xlabel: str, title: str, cumulative: bool=False) -> go.Figure:
     return returns.hist(
         nbins=int(max(len(returns) / 50, 10)),
         histnorm="percent",
         cumulative=cumulative,
-        title="Final portfolio value",
-        labels={"value": "Portfolio Value (£)"},
+        title=title,
+        labels={"value": xlabel},
     ).update_layout(showlegend=False, yaxis_title="Percentage (%)")
 
 

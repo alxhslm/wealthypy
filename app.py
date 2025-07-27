@@ -122,6 +122,11 @@ if "contributions" not in st.session_state:
         }
     ).set_index("Date")
 
+if "simulation_dfs" not in st.session_state:
+    st.session_state["simulation_dfs"] = pd.DataFrame(dtype=float)
+if "cagr" not in st.session_state:
+    st.session_state["cagr"] = pd.Series(dtype=float)
+
 if page == "Configure funds":
     st.header("Funds")
     starting_amount = st.number_input(
@@ -278,7 +283,7 @@ elif page == "Run simulation":
 
     if simulate:
         if mode == "Monte-carlo":
-            simulation_dfs, aer = monte_carlo(
+            simulation_dfs, cagr = monte_carlo(
                 starting_amount=starting_amount,
                 monthly_contributions=contributions["Monthly Contribution"],
                 allocation=allocation,
@@ -291,53 +296,8 @@ elif page == "Run simulation":
                 num_simulations=num_simulations,
                 seed=42,
             )
-
-            st.plotly_chart(
-                plot_returns(
-                    simulation_dfs,
-                    confidence=st.radio(
-                        "Select confidence interval",
-                        [0.9, 0.95, 0.99],
-                        format_func=lambda x: f"{x * 100:.0f}%",
-                        index=1,
-                        horizontal=True,
-                    ),
-                )
-            )
-
-            st.plotly_chart(
-                plot_hist_returns(
-                    simulation_dfs.iloc[-1],
-                    cumulative=st.toggle("Show cumulative distribution", False),
-                )
-            )
-
-            quantiles = pd.DataFrame(
-                {
-                    "Portfolio Value": compute_quantiles(simulation_dfs.iloc[-1]),
-                    "CAGR": compute_quantiles(aer),
-                }
-            )
-            st.dataframe(
-                quantiles,
-                column_config={
-                    "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
-                    "CAGR": st.column_config.NumberColumn(format="percent"),
-                },
-            )
-
-            st.plotly_chart(
-                plot_scatter(
-                    pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100 * aer}),
-                    x="value",
-                    y="aer",
-                    title="Portfolio Value vs CAGR",
-                    x_title="Portfolio Value (£)",
-                    y_title="CAGR (%)",
-                )
-            )
         elif mode == "Backtesting":
-            simulation_df, aer = backtest(
+            simulation_dfs, cagr = backtest(
                 starting_amount=starting_amount,
                 monthly_contributions=contributions["Monthly Contribution"],
                 allocation=allocation,
@@ -347,13 +307,54 @@ elif page == "Run simulation":
                 start_date=start_date,
                 end_date=end_date,
             )
-            st.plotly_chart(plot_returns(simulation_df))
-            st.metric(
-                "Portfolio Value (£)",
-                f"£{simulation_df.iloc[-1, 0]:.2f}",
-                delta=f"{aer.mean() * 100:.2f}%",
+        st.session_state["simulation_dfs"] = simulation_dfs
+        st.session_state["cagr"] = cagr
+    else:
+        simulation_dfs = st.session_state["simulation_dfs"]
+        cagr = st.session_state["cagr"]
+
+    if mode == "Monte-carlo":
+        st.plotly_chart(
+            plot_returns(
+                simulation_dfs,
+                confidence=st.radio(
+                    "Select confidence interval",
+                    [0.9, 0.95, 0.99],
+                    format_func=lambda x: f"{x * 100:.0f}%",
+                    index=1,
+                    horizontal=True,
+                ),
             )
-        else:
-            raise ValueError(f"Unknown mode {mode}")
+        )
+        metric = st.radio("Select metric", ["Returns", "CAGR"], horizontal=True)
+        show_cumulative = st.toggle(
+            "Show cumulative distribution",
+            value=False,
+            help="If checked, the histogram will show the cumulative distribution of the final portfolio value.",
+            disabled=metric == "CAGR",
+        )
+        if metric == "Returns":
+            st.plotly_chart(
+                plot_hist_returns(
+                    simulation_dfs.iloc[-1],
+                    cumulative=show_cumulative,
+                    xlabel="Portfolio Value (£)",
+                    title="Portfolio Value Distribution",
+                )
+            )
+        elif metric == "CAGR":
+            st.plotly_chart(
+                plot_hist_returns(cagr*100, xlabel="CAGR [%]", title="CAGR Distribution")
+            )
+    else:
+        st.plotly_chart(plot_returns(simulation_dfs))
+
+        st.metric(
+            "Portfolio Value (£)",
+            f"£{simulation_dfs.iloc[-1, 0]:.2f}",
+            delta=f"{cagr.mean() * 100:.2f}%",
+        )
+
+
 else:
     raise ValueError(f"Unknown page {page}")
