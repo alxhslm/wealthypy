@@ -72,7 +72,7 @@ def backtest(
 
 # Streamlit UI
 st.set_page_config(
-    layout="wide", page_icon=":chart", page_title="Portfolio Growth Simulator"
+    layout="wide", page_icon=":chart:", page_title="WealthyPy"
 )
 st.title("Portfolio Growth Simulator")
 
