@@ -144,87 +144,80 @@ if mode == "Configure portfolio":
         estimate_returns = st.form_submit_button(
             "Estimate returns",
             help="Estimate the returns and volatility of the assets based on historical data from Yahoo Finance.",
-            icon=":material/cloud_download:"
+            icon=":material/cloud_download:",
         )
-    tabs = st.tabs(["Assets", "Allocation"])
     assets = st.session_state["assets"]
-    with tabs[0]:
-        for name, asset in assets.items():
-            if estimate_returns and asset.ticker:
-                growth, volatility = estimate_returns_and_volatility(
-                    asset.ticker, start_est, end_est
-                )
-                asset.returns = growth
-                asset.volatility = volatility
-
-        asset_df = pd.DataFrame.from_records(
-            [{"name": name} | asdict(asset) for name, asset in assets.items()]
-        ).set_index("name")
-        asset_df["returns"] *= 100  # Convert to percentage
-        asset_df["volatility"] *= 100  # Convert to percentage
-        modified_asset_df = st.data_editor(
-            asset_df,
-            num_rows="dynamic",
-            column_config={
-                "name": st.column_config.TextColumn(
-                    "Asset Name",
-                    help="The name of the asset. This will be used in the allocation table.",
-                    max_chars=50,
-                ),
-                "returns": st.column_config.NumberColumn(
-                    "Annual Returns",
-                    help="The expected annual returns of the asset.",
-                    format="%.1f%%",
-                    min_value=0.0,
-                    max_value=100.0,
-                ),
-                "volatility": st.column_config.NumberColumn(
-                    "Annual Volatility",
-                    help="The expected annual volatility of the asset.",
-                    format="%.1f%%",
-                    min_value=0.0,
-                    max_value=100.0,
-                ),
-                "ticker": st.column_config.TextColumn(
-                    "Ticker",
-                    help="The ticker symbol of the asset. This is used to fetch historical data.",
-                    max_chars=10,
-                ),
-            },
-        ).replace(np.nan, None)
-        modified_asset_df["returns"] /= 100  # Convert back to decimal
-        modified_asset_df["volatility"] /= 100  # Convert back to decimal
-        assets = {name: Asset(**asset) for name, asset in modified_asset_df.iterrows()}
-
-    with tabs[1]:
-        last_asset = list(assets.keys())[-1]
-        allocation = st.session_state["allocation"]
-        allocation = allocation.reindex(columns=assets.keys())
-        allocation.index = allocation.index + (start_date - allocation.index[0])
-        if not allocation.equals(st.session_state["allocation"]):
-            for i in range(1, allocation.shape[1] - 1):
-                max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
-                allocation.iloc[:, i] = allocation.iloc[:, i].clip(
-                    lower=0, upper=max_allocation
-                )
-            allocation.iloc[:, -1] = (1 - allocation.iloc[:, :-1].sum(axis=1)).clip(
-                lower=0
+    st.subheader("Assets")
+    for name, asset in assets.items():
+        if estimate_returns and asset.ticker:
+            growth, volatility = estimate_returns_and_volatility(
+                asset.ticker, start_est, end_est
             )
-        allocation: pd.DataFrame = st.data_editor(
-            allocation.reset_index(),
-            hide_index=True,
-            num_rows="dynamic",
-            column_config={
-                k: st.column_config.NumberColumn(
-                    min_value=0, max_value=1, format="percent"
-                )
-                for k in assets
-            }
-            | {"Date": st.column_config.DateColumn()},
-            key="allocation_editor",
-        ).set_index("Date")
+            asset.returns = growth
+            asset.volatility = volatility
 
-        st.session_state["allocation"] = allocation
+    asset_df = pd.DataFrame.from_records(
+        [{"name": name} | asdict(asset) for name, asset in assets.items()]
+    ).set_index("name")
+    asset_df["returns"] *= 100  # Convert to percentage
+    asset_df["volatility"] *= 100  # Convert to percentage
+    modified_asset_df = st.data_editor(
+        asset_df,
+        num_rows="dynamic",
+        column_config={
+            "name": st.column_config.TextColumn(
+                "Asset Name",
+                help="The name of the asset. This will be used in the allocation table.",
+                max_chars=50,
+            ),
+            "returns": st.column_config.NumberColumn(
+                "Annual Returns",
+                help="The expected annual returns of the asset.",
+                format="%.1f%%",
+                min_value=0.0,
+                max_value=100.0,
+            ),
+            "volatility": st.column_config.NumberColumn(
+                "Annual Volatility",
+                help="The expected annual volatility of the asset.",
+                format="%.1f%%",
+                min_value=0.0,
+                max_value=100.0,
+            ),
+            "ticker": st.column_config.TextColumn(
+                "Ticker",
+                help="The ticker symbol of the asset. This is used to fetch historical data.",
+                max_chars=10,
+            ),
+        },
+    ).replace(np.nan, None)
+    modified_asset_df["returns"] /= 100  # Convert back to decimal
+    modified_asset_df["volatility"] /= 100  # Convert back to decimal
+    assets = {name: Asset(**asset) for name, asset in modified_asset_df.iterrows()}
+
+    st.subheader("Allocation")
+    last_asset = list(assets.keys())[-1]
+    allocation = st.session_state["allocation"]
+    allocation = allocation.reindex(columns=assets.keys())
+    allocation.index = allocation.index + (start_date - allocation.index[0])
+    if not allocation.equals(st.session_state["allocation"]):
+        for i in range(1, allocation.shape[1] - 1):
+            max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
+            allocation.iloc[:, i] = allocation.iloc[:, i].clip(
+                lower=0, upper=max_allocation
+            )
+        allocation.iloc[:, -1] = (1 - allocation.iloc[:, :-1].sum(axis=1)).clip(lower=0)
+    allocation: pd.DataFrame = st.data_editor(
+        allocation.reset_index(),
+        hide_index=True,
+        num_rows="dynamic",
+        column_config={
+            k: st.column_config.NumberColumn(min_value=0, max_value=1, format="percent")
+            for k in assets
+        }
+        | {"Date": st.column_config.DateColumn()},
+        key="allocation_editor",
+    ).set_index("Date")
 
     st.session_state["assets"] = assets
     st.session_state["allocation"] = allocation
@@ -236,7 +229,10 @@ else:
     allocation = st.session_state["allocation"]
 
     mode = st.radio(
-        "Select simulation method", ["Monte-carlo", "Backtesting"], index=0, horizontal=True
+        "Select simulation method",
+        ["Monte-carlo", "Backtesting"],
+        index=0,
+        horizontal=True,
     )
 
     columns = st.columns([0.15, 0.85])
@@ -266,7 +262,6 @@ else:
                     cov_matrix = None
 
     st.divider()
-
 
     if simulate:
         if mode == "Monte-carlo":
