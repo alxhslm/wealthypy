@@ -33,7 +33,9 @@ def monte_carlo(
     index = pd.date_range(start_date, end_date, freq="ME").date
     return run_simulation(
         starting_amount=starting_amount,
-        monthly_contributions=monthly_contributions.reindex(index, method="ffill").fillna(0),
+        monthly_contributions=monthly_contributions.reindex(
+            index, method="ffill"
+        ).fillna(0),
         growth=sample_returns(
             assets=assets,
             allocation=allocation.reindex(index, method="ffill"),
@@ -61,7 +63,9 @@ def backtest(
 
     return run_simulation(
         starting_amount=starting_amount,
-        monthly_contributions=monthly_contributions.reindex(index, method="ffill").fillna(0),
+        monthly_contributions=monthly_contributions.reindex(
+            index, method="ffill"
+        ).fillna(0),
         growth=fetch_historic_returns(
             assets=assets, allocation=allocation.reindex(index, method="ffill").bfill()
         )
@@ -129,14 +133,17 @@ if "cagr" not in st.session_state:
 
 if page == "Configure funds":
     st.header("Funds")
+    starting_amount = st.session_state["starting_amount"]
     starting_amount = st.number_input(
         "Starting amount (£)",
-        value=st.session_state["starting_amount"],
+        value=starting_amount,
         step=1000.0,
         format="%.1f",
     )
+    contributions = st.session_state["contributions"]
+    contributions.index = contributions.index + (start_date - contributions.index[0])
     contributions = st.data_editor(
-        st.session_state["contributions"].reset_index(),
+        contributions.reset_index(),
         num_rows="dynamic",
         hide_index=True,
         column_config={
