@@ -33,7 +33,7 @@ def monte_carlo(
     index = pd.date_range(start_date, end_date, freq="ME").date
     return run_simulation(
         starting_amount=starting_amount,
-        monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
+        monthly_contributions=monthly_contributions.reindex(index, method="ffill").fillna(0),
         growth=sample_returns(
             assets=assets,
             allocation=allocation.reindex(index, method="ffill"),
@@ -61,9 +61,9 @@ def backtest(
 
     return run_simulation(
         starting_amount=starting_amount,
-        monthly_contributions=monthly_contributions.reindex(index, method="ffill"),
+        monthly_contributions=monthly_contributions.reindex(index, method="ffill").fillna(0),
         growth=fetch_historic_returns(
-            assets=assets, allocation=allocation.reindex(index, method="ffill")
+            assets=assets, allocation=allocation.reindex(index, method="ffill").bfill()
         )
         - fees / 12,
         inflation=inflation,
@@ -344,7 +344,9 @@ elif page == "Run simulation":
             )
         elif metric == "CAGR":
             st.plotly_chart(
-                plot_hist_returns(cagr*100, xlabel="CAGR [%]", title="CAGR Distribution")
+                plot_hist_returns(
+                    cagr * 100, xlabel="CAGR [%]", title="CAGR Distribution"
+                )
             )
     else:
         st.plotly_chart(plot_returns(simulation_dfs))
