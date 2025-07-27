@@ -1,7 +1,8 @@
+from dataclasses import asdict
 import streamlit as st
 import pandas as pd
 import datetime as dt
-
+import numpy as np
 from src.backtesting import (
     estimate_returns_and_volatility,
     fetch_historic_returns,
@@ -75,37 +76,22 @@ st.set_page_config(
 )
 st.title("Portfolio Growth Simulator")
 
-if "default_assets" not in st.session_state:
-    st.session_state["default_assets"] = {
+if "assets" not in st.session_state:
+    st.session_state["assets"] = {
         "Equities": Asset(returns=5.0 / 100, volatility=25 / 100, ticker="VWRP.L"),
         "Bonds": Asset(returns=2.0 / 100, volatility=0.0 / 100, ticker="VAGS.L"),
     }
 
-if "default_allocation" not in st.session_state:
-    default_allocation = pd.DataFrame(
+if "allocation" not in st.session_state:
+    allocation = pd.DataFrame(
         {
-            k: [1.0 / len(st.session_state["default_assets"])]
-            for k in st.session_state["default_assets"]
+            k: [1.0 / len(st.session_state["assets"])]
+            for k in st.session_state["assets"]
         },
         index=[dt.date.today() - dt.timedelta(days=3 * 365.25)],
     )
-    default_allocation.index.name = "Date"
-    st.session_state["default_allocation"] = default_allocation
-
-if "selected_assets" not in st.session_state:
-    st.session_state["selected_assets"] = st.session_state["default_assets"].copy()
-
-if "allocation" not in st.session_state:
-    st.session_state["allocation"] = st.session_state["default_allocation"].copy()
-
-
-def _get_name(assets: dict[str, Asset]) -> str:
-    new_name = "New asset"
-    i = 1
-    while new_name in assets:
-        new_name = f"New asset ({i})"
-        i += 1
-    return new_name
+    allocation.index.name = "Date"
+    st.session_state["allocation"] = allocation
 
 
 with st.sidebar:
@@ -145,85 +131,77 @@ with st.sidebar:
 
 if mode == "Configure portfolio":
     st.header("Portfolio")
-    with st.popover("Estimate returns", icon=":material/cloud_download:"):
-        start_est = st.date_input(
-            "Start Date", value=dt.date(1900, 1, 1), max_value=dt.date.today()
-        )
-        end_est = st.date_input(
-            "Start Date", value=dt.date.today(), max_value=dt.date.today()
+    with st.form("portfolio_form"):
+        cols = st.columns(2)
+        with cols[0]:
+            start_est = st.date_input(
+                "Start Date", value=dt.date(1900, 1, 1), max_value=dt.date.today()
+            )
+        with cols[1]:
+            end_est = st.date_input(
+                "End Date", value=dt.date.today(), max_value=dt.date.today()
+            )
+        estimate_returns = st.form_submit_button(
+            "Estimate returns",
+            help="Estimate the returns and volatility of the assets based on historical data from Yahoo Finance.",
+            icon=":material/cloud_download:"
         )
     tabs = st.tabs(["Assets", "Allocation"])
+    assets = st.session_state["assets"]
     with tabs[0]:
-        container = st.container()
+        for name, asset in assets.items():
+            if estimate_returns and asset.ticker:
+                growth, volatility = estimate_returns_and_volatility(
+                    asset.ticker, start_est, end_est
+                )
+                asset.returns = growth
+                asset.volatility = volatility
 
-        if st.button(":material/add:"):
-            new_name = _get_name(st.session_state["default_assets"])
-            st.session_state["default_assets"][new_name] = Asset(
-                returns=0.0, volatility=0.0
-            )
-            st.session_state["default_allocation"][new_name] = 0.0
-
-        with container:
-            selected_assets = {}
-            renamed_assets = {}
-            to_delete = []
-            for name, asset in st.session_state["default_assets"].items():
-                with st.expander(f"{name}"):
-                    new_name = st.text_input("Name", name, key=f"{name}_name")
-                    if new_name != name:
-                        renamed_assets[name] = new_name
-                    ticker = st.text_input("Ticker", asset.ticker, key=f"{name}_ticker")
-                    if ticker is not None:
-                        asset.returns, asset.volatility = (
-                            estimate_returns_and_volatility(
-                                ticker, start=start_est, end=end_est
-                            )
-                        )
-                    selected_assets[name] = Asset(
-                        returns=st.number_input(
-                            "Annual Returns (%)",
-                            value=asset.returns * 100,
-                            step=0.1,
-                            key=f"{name}_return",
-                        )
-                        / 100,
-                        volatility=(
-                            st.number_input(
-                                "Annual Volatility (%)",
-                                value=asset.volatility * 100,
-                                step=0.1,
-                                key=f"{name}_volatility",
-                            )
-                            / 100
-                        ),
-                        ticker=ticker,
-                    )
-                    st.text(
-                        f"Estimated Returns: {100 * (asset.returns - asset.volatility**2 / 2):.2f}%"
-                    )
-                    if len(st.session_state["default_assets"]) > 1:
-                        if st.button(":material/delete:", key=f"{name}_delete"):
-                            to_delete.append(name)
+        asset_df = pd.DataFrame.from_records(
+            [{"name": name} | asdict(asset) for name, asset in assets.items()]
+        ).set_index("name")
+        asset_df["returns"] *= 100  # Convert to percentage
+        asset_df["volatility"] *= 100  # Convert to percentage
+        modified_asset_df = st.data_editor(
+            asset_df,
+            num_rows="dynamic",
+            column_config={
+                "name": st.column_config.TextColumn(
+                    "Asset Name",
+                    help="The name of the asset. This will be used in the allocation table.",
+                    max_chars=50,
+                ),
+                "returns": st.column_config.NumberColumn(
+                    "Annual Returns",
+                    help="The expected annual returns of the asset.",
+                    format="%.1f%%",
+                    min_value=0.0,
+                    max_value=100.0,
+                ),
+                "volatility": st.column_config.NumberColumn(
+                    "Annual Volatility",
+                    help="The expected annual volatility of the asset.",
+                    format="%.1f%%",
+                    min_value=0.0,
+                    max_value=100.0,
+                ),
+                "ticker": st.column_config.TextColumn(
+                    "Ticker",
+                    help="The ticker symbol of the asset. This is used to fetch historical data.",
+                    max_chars=10,
+                ),
+            },
+        ).replace(np.nan, None)
+        modified_asset_df["returns"] /= 100  # Convert back to decimal
+        modified_asset_df["volatility"] /= 100  # Convert back to decimal
+        assets = {name: Asset(**asset) for name, asset in modified_asset_df.iterrows()}
 
     with tabs[1]:
-        last_asset = list(selected_assets.keys())[-1]
-        default_allocation = st.session_state["default_allocation"]
-        default_allocation.index = default_allocation.index + (
-            start_date - default_allocation.index[0]
-        )
-        allocation: pd.DataFrame = st.data_editor(
-            default_allocation.reset_index(),
-            num_rows="dynamic",
-            hide_index=True,
-            column_config={
-                k: st.column_config.NumberColumn(
-                    min_value=0, max_value=1, format="percent"
-                )
-                for k in selected_assets
-            },
-            key=id(st.session_state["default_allocation"]),
-        ).set_index("Date")
-        if not allocation.equals(st.session_state["default_allocation"]):
+        last_asset = list(assets.keys())[-1]
+        allocation = st.session_state["allocation"]
+        allocation = allocation.reindex(columns=assets.keys())
+        allocation.index = allocation.index + (start_date - allocation.index[0])
+        if not allocation.equals(st.session_state["allocation"]):
             for i in range(1, allocation.shape[1] - 1):
                 max_allocation = 1 - allocation.iloc[:, :i].sum(axis=1)
                 allocation.iloc[:, i] = allocation.iloc[:, i].clip(
@@ -232,142 +210,140 @@ if mode == "Configure portfolio":
             allocation.iloc[:, -1] = (1 - allocation.iloc[:, :-1].sum(axis=1)).clip(
                 lower=0
             )
-            st.session_state["default_allocation"] = allocation
-            st.rerun()
-
-        if to_delete:
-            st.session_state["default_assets"] = {
-                k: v for k, v in selected_assets.items() if k not in to_delete
+        allocation: pd.DataFrame = st.data_editor(
+            allocation.reset_index(),
+            hide_index=True,
+            num_rows="dynamic",
+            column_config={
+                k: st.column_config.NumberColumn(
+                    min_value=0, max_value=1, format="percent"
+                )
+                for k in assets
             }
-            st.session_state["default_allocation"] = allocation.drop(columns=to_delete)
-            st.rerun()
+            | {"Date": st.column_config.DateColumn()},
+            key="allocation_editor",
+        ).set_index("Date")
 
-        if renamed_assets:
-            st.session_state["default_assets"] = selected_assets
-            for old_name, new_name in renamed_assets.items():
-                st.session_state["default_assets"][new_name] = st.session_state[
-                    "default_assets"
-                ].pop(old_name)
-            st.session_state["default_allocation"] = allocation.rename(
-                columns=renamed_assets
-            )
-            st.rerun()
-    st.session_state["selected_assets"] = selected_assets
+        st.session_state["allocation"] = allocation
+
+    st.session_state["assets"] = assets
     st.session_state["allocation"] = allocation
 else:
     st.header("Settings")
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
     fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
-    selected_assets = st.session_state["selected_assets"]
+    assets = st.session_state["assets"]
     allocation = st.session_state["allocation"]
 
-mode = st.radio("Select simulation method", ["Monte-carlo", "Backtesting"], index=0, horizontal=True)
+    mode = st.radio(
+        "Select simulation method", ["Monte-carlo", "Backtesting"], index=0, horizontal=True
+    )
 
-columns = st.columns([0.15, 0.85])
-with columns[0]:
-    simulate = st.button("Run Simulation")
-with columns[1]:
-    if mode == "Monte-carlo":
-        with st.popover("Settings", icon=":material/settings:"):
-            num_simulations = st.number_input(
-                "Number of Simulations", value=10000, step=1
+    columns = st.columns([0.15, 0.85])
+    with columns[0]:
+        simulate = st.button("Run Simulation")
+    with columns[1]:
+        if mode == "Monte-carlo":
+            with st.popover("Settings", icon=":material/settings:"):
+                num_simulations = st.number_input(
+                    "Number of Simulations", value=10000, step=1
+                )
+                if st.toggle(
+                    "Account for correlation between assets",
+                    value=True,
+                    help="If unchecked, the correlation between assets will be ignored.",
+                ):
+                    # Estimate the covariance matrix from historical returns
+                    cov_matrix = pd.DataFrame(
+                        {
+                            name: fetch_monthly_returns(
+                                asset.ticker, start=start_date, end=end_date
+                            )
+                            for name, asset in assets.items()
+                        }
+                    ).cov()
+                else:
+                    cov_matrix = None
+
+    st.divider()
+
+
+    if simulate:
+        if mode == "Monte-carlo":
+            simulation_dfs, aer = monte_carlo(
+                starting_amount=starting_amount,
+                monthly_contributions=contributions["Monthly Contribution"],
+                allocation=allocation,
+                assets=assets,
+                inflation=inflation,
+                fees=fees,
+                start_date=start_date,
+                end_date=end_date,
+                cov_matrix=cov_matrix,
+                num_simulations=num_simulations,
+                seed=42,
             )
-            if st.toggle(
-                "Account for correlation between assets",
-                value=True,
-                help="If unchecked, the correlation between assets will be ignored.",
-            ):
-                # Estimate the covariance matrix from historical returns
-                cov_matrix = pd.DataFrame(
-                    {
-                        name: fetch_monthly_returns(
-                            asset.ticker, start=start_date, end=end_date
-                        )
-                        for name, asset in selected_assets.items()
-                    }
-                ).cov()
-            else:
-                cov_matrix = None
 
-st.divider()
-
-
-if simulate:
-    if mode == "Monte-carlo":
-        simulation_dfs, aer = monte_carlo(
-            starting_amount=starting_amount,
-            monthly_contributions=contributions["Monthly Contribution"],
-            allocation=allocation,
-            assets=selected_assets,
-            inflation=inflation,
-            fees=fees,
-            start_date=start_date,
-            end_date=end_date,
-            cov_matrix=cov_matrix,
-            num_simulations=num_simulations,
-            seed=42,
-        )
-
-        st.plotly_chart(
-            plot_returns(
-                simulation_dfs,
-                confidence=st.radio(
-                    "Select confidence interval",
-                    [0.9, 0.95, 0.99],
-                    format_func=lambda x: f"{x * 100:.0f}%",
-                    index=1,
-                    horizontal=True,
-                ),
+            st.plotly_chart(
+                plot_returns(
+                    simulation_dfs,
+                    confidence=st.radio(
+                        "Select confidence interval",
+                        [0.9, 0.95, 0.99],
+                        format_func=lambda x: f"{x * 100:.0f}%",
+                        index=1,
+                        horizontal=True,
+                    ),
+                )
             )
-        )
 
-        st.plotly_chart(
-            plot_hist_returns(
-                simulation_dfs.iloc[-1],
-                cumulative=st.toggle("Show cumulative distribution", False),
+            st.plotly_chart(
+                plot_hist_returns(
+                    simulation_dfs.iloc[-1],
+                    cumulative=st.toggle("Show cumulative distribution", False),
+                )
             )
-        )
 
-        quantiles = pd.DataFrame(
-            {
-                "Portfolio Value": compute_quantiles(simulation_dfs.iloc[-1]),
-                "AER": compute_quantiles(aer),
-            }
-        )
-        st.dataframe(
-            quantiles,
-            column_config={
-                "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
-                "AER": st.column_config.NumberColumn(format="percent"),
-            },
-        )
-
-        st.plotly_chart(
-            plot_scatter(
-                pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100 * aer}),
-                x="value",
-                y="aer",
-                title="Portfolio Value vs AER",
-                x_title="Portfolio Value (£)",
-                y_title="AER (%)",
+            quantiles = pd.DataFrame(
+                {
+                    "Portfolio Value": compute_quantiles(simulation_dfs.iloc[-1]),
+                    "AER": compute_quantiles(aer),
+                }
             )
-        )
-    elif mode == "Backtesting":
-        simulation_df, aer = backtest(
-            starting_amount=starting_amount,
-            monthly_contributions=contributions["Monthly Contribution"],
-            allocation=allocation,
-            assets=selected_assets,
-            inflation=inflation,
-            fees=fees,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        st.plotly_chart(plot_returns(simulation_df))
-        st.metric(
-            "Portfolio Value (£)",
-            f"£{simulation_df.iloc[-1, 0]:.2f}",
-            delta=f"{aer.mean() * 100:.2f}%",
-        )
-    else:
-        raise ValueError(f"Unknown mode {mode}")
+            st.dataframe(
+                quantiles,
+                column_config={
+                    "Portfolio Value": st.column_config.NumberColumn(format="£%.2f"),
+                    "AER": st.column_config.NumberColumn(format="percent"),
+                },
+            )
+
+            st.plotly_chart(
+                plot_scatter(
+                    pd.DataFrame({"value": simulation_dfs.iloc[-1], "aer": 100 * aer}),
+                    x="value",
+                    y="aer",
+                    title="Portfolio Value vs AER",
+                    x_title="Portfolio Value (£)",
+                    y_title="AER (%)",
+                )
+            )
+        elif mode == "Backtesting":
+            simulation_df, aer = backtest(
+                starting_amount=starting_amount,
+                monthly_contributions=contributions["Monthly Contribution"],
+                allocation=allocation,
+                assets=assets,
+                inflation=inflation,
+                fees=fees,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            st.plotly_chart(plot_returns(simulation_df))
+            st.metric(
+                "Portfolio Value (£)",
+                f"£{simulation_df.iloc[-1, 0]:.2f}",
+                delta=f"{aer.mean() * 100:.2f}%",
+            )
+        else:
+            raise ValueError(f"Unknown mode {mode}")
