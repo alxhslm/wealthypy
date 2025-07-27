@@ -1,5 +1,6 @@
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 
 pd.options.plotting.backend = "plotly"
 
@@ -62,13 +63,17 @@ def plot_returns(simulation_dfs: pd.DataFrame, confidence:float|None=None) -> go
 
 
 def plot_hist_returns(returns: pd.Series, xlabel: str, title: str, cumulative: bool=False) -> go.Figure:
-    return returns.hist(
+    fig = px.histogram(
+        returns,
         nbins=int(max(len(returns) / 50, 10)),
         histnorm="percent",
-        cumulative=cumulative,
+        cumulative="sum" if cumulative else None,
         title=title,
         labels={"value": xlabel},
-    ).update_layout(showlegend=False, yaxis_title="Percentage (%)")
+        marginal="box"
+    )
+    fig.update_layout(showlegend=False, yaxis_title="Percentage (%)")
+    return fig
 
 
 def plot_scatter(
