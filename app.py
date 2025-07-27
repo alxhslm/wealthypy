@@ -105,7 +105,7 @@ with st.sidebar:
             value=dt.date.today() - dt.timedelta(days=3 * 365.25),
             max_value=end_date,
         )
-    mode = st.radio(
+    page = st.radio(
         "Select mode",
         options=["Configure funds", "Configure portfolio", "Run simulation"],
         index=0,
@@ -122,7 +122,7 @@ if "contributions" not in st.session_state:
         }
     ).set_index("Date")
 
-if mode == "Configure funds":
+if page == "Configure funds":
     st.header("Funds")
     starting_amount = st.number_input(
         "Starting amount (£)",
@@ -140,7 +140,7 @@ if mode == "Configure funds":
     ).set_index("Date")
     st.session_state["starting_amount"] = starting_amount
     st.session_state["contributions"] = contributions
-elif mode == "Configure portfolio":
+elif page == "Configure portfolio":
     st.header("Portfolio")
     with st.form("portfolio_form"):
         cols = st.columns(2)
@@ -232,7 +232,7 @@ elif mode == "Configure portfolio":
 
     st.session_state["assets"] = assets
     st.session_state["allocation"] = allocation
-elif mode == "Run simulation":
+elif page == "Run simulation":
     st.header("Simulation")
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
     fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
@@ -356,4 +356,4 @@ elif mode == "Run simulation":
         else:
             raise ValueError(f"Unknown mode {mode}")
 else:
-    raise ValueError(f"Unknown mode {mode}")
+    raise ValueError(f"Unknown page {page}")
