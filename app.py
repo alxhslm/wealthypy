@@ -92,6 +92,12 @@ if "default_allocation" not in st.session_state:
     default_allocation.index.name = "Date"
     st.session_state["default_allocation"] = default_allocation
 
+if "selected_assets" not in st.session_state:
+    st.session_state["selected_assets"] = st.session_state["default_assets"].copy()
+
+if "allocation" not in st.session_state:
+    st.session_state["allocation"] = st.session_state["default_allocation"].copy()
+
 
 def _get_name(assets: dict[str, Asset]) -> str:
     new_name = "New asset"
@@ -130,10 +136,16 @@ with st.sidebar:
         },
     ).set_index("Date")
 
+    mode = st.radio(
+        "Select mode",
+        options=["Configure portfolio", "Run simulation"],
+        index=0,
+        horizontal=True,
+    )
+
+if mode == "Configure portfolio":
     st.header("Portfolio")
-    with st.popover(
-        "Estimate returns", icon=":material/cloud_download:"
-    ):
+    with st.popover("Estimate returns", icon=":material/cloud_download:"):
         start_est = st.date_input(
             "Start Date", value=dt.date(1900, 1, 1), max_value=dt.date.today()
         )
@@ -223,29 +235,33 @@ with st.sidebar:
             st.session_state["default_allocation"] = allocation
             st.rerun()
 
-    if to_delete:
-        st.session_state["default_assets"] = {
-            k: v for k, v in selected_assets.items() if k not in to_delete
-        }
-        st.session_state["default_allocation"] = allocation.drop(columns=to_delete)
-        st.rerun()
+        if to_delete:
+            st.session_state["default_assets"] = {
+                k: v for k, v in selected_assets.items() if k not in to_delete
+            }
+            st.session_state["default_allocation"] = allocation.drop(columns=to_delete)
+            st.rerun()
 
-    if renamed_assets:
-        st.session_state["default_assets"] = selected_assets
-        for old_name, new_name in renamed_assets.items():
-            st.session_state["default_assets"][new_name] = st.session_state[
-                "default_assets"
-            ].pop(old_name)
-        st.session_state["default_allocation"] = allocation.rename(
-            columns=renamed_assets
-        )
-        st.rerun()
-
+        if renamed_assets:
+            st.session_state["default_assets"] = selected_assets
+            for old_name, new_name in renamed_assets.items():
+                st.session_state["default_assets"][new_name] = st.session_state[
+                    "default_assets"
+                ].pop(old_name)
+            st.session_state["default_allocation"] = allocation.rename(
+                columns=renamed_assets
+            )
+            st.rerun()
+    st.session_state["selected_assets"] = selected_assets
+    st.session_state["allocation"] = allocation
+else:
     st.header("Settings")
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
     fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
+    selected_assets = st.session_state["selected_assets"]
+    allocation = st.session_state["allocation"]
 
-mode = st.radio("Select mode", ["Monte-carlo", "Backtesting"], index=0, horizontal=True)
+mode = st.radio("Select simulation method", ["Monte-carlo", "Backtesting"], index=0, horizontal=True)
 
 columns = st.columns([0.15, 0.85])
 with columns[0]:
