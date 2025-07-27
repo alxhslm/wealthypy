@@ -71,10 +71,10 @@ def backtest(
 
 
 # Streamlit UI
-st.set_page_config(
-    layout="wide", page_icon=":chart:", page_title="WealthyPy"
-)
-st.title("Portfolio Growth Simulator")
+st.set_page_config(layout="wide", page_icon=":chart:", page_title="WealthyPy")
+with st.sidebar:
+    st.title(":chart: WealthyPy")
+    st.caption("Portfolio Growth Simulator")
 
 if "assets" not in st.session_state:
     st.session_state["assets"] = {
@@ -95,41 +95,52 @@ if "allocation" not in st.session_state:
 
 
 with st.sidebar:
-    st.header("Simulation")
     container = st.container()
     end_date = st.date_input(
-        "End Date", max_value=dt.date.today(), value=dt.date.today()
+        "End date", max_value=dt.date.today(), value=dt.date.today()
     )
     with container:
         start_date = st.date_input(
-            "Start Date",
+            "Start date",
             value=dt.date.today() - dt.timedelta(days=3 * 365.25),
             max_value=end_date,
         )
+    mode = st.radio(
+        "Select mode",
+        options=["Configure funds", "Configure portfolio", "Run simulation"],
+        index=0,
+        horizontal=True,
+    )
+
+if "starting_amount" not in st.session_state:
+    st.session_state["starting_amount"] = 10000.0
+if "contributions" not in st.session_state:
+    st.session_state["contributions"] = pd.DataFrame(
+        {
+            "Date": [start_date],
+            "Monthly Contribution": [1000.0],
+        }
+    ).set_index("Date")
+
+if mode == "Configure funds":
     st.header("Funds")
-    starting_amount = st.number_input("Starting amount (£)", value=10000, step=1000)
+    starting_amount = st.number_input(
+        "Starting amount (£)",
+        value=st.session_state["starting_amount"],
+        step=1000.0,
+        format="%.1f",
+    )
     contributions = st.data_editor(
-        pd.DataFrame(
-            {
-                "Date": [start_date],
-                "Monthly Contribution": [1000.0],
-            }
-        ),
+        st.session_state["contributions"].reset_index(),
         num_rows="dynamic",
         hide_index=True,
         column_config={
             "Monthly Contribution": st.column_config.NumberColumn(format="£%.2f")
         },
     ).set_index("Date")
-
-    mode = st.radio(
-        "Select mode",
-        options=["Configure portfolio", "Run simulation"],
-        index=0,
-        horizontal=True,
-    )
-
-if mode == "Configure portfolio":
+    st.session_state["starting_amount"] = starting_amount
+    st.session_state["contributions"] = contributions
+elif mode == "Configure portfolio":
     st.header("Portfolio")
     with st.form("portfolio_form"):
         cols = st.columns(2)
@@ -221,10 +232,12 @@ if mode == "Configure portfolio":
 
     st.session_state["assets"] = assets
     st.session_state["allocation"] = allocation
-else:
-    st.header("Settings")
+elif mode == "Run simulation":
+    st.header("Simulation")
     inflation = st.number_input("Inflation Rate (%)", value=0.0, step=0.1) / 100
     fees = st.number_input("Annual fees (%)", value=0.4, step=1.0) / 100
+    starting_amount = st.session_state["starting_amount"]
+    contributions = st.session_state["contributions"]
     assets = st.session_state["assets"]
     allocation = st.session_state["allocation"]
 
@@ -342,3 +355,5 @@ else:
             )
         else:
             raise ValueError(f"Unknown mode {mode}")
+else:
+    raise ValueError(f"Unknown mode {mode}")
